@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Weather Station</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg:        #0a0e17;
+      --surface:   #111827;
+      --border:    #1e293b;
+      --cyan:      #22d3ee;
+      --amber:     #f59e0b;
+      --muted:     #4b5563;
+      --text:      #e2e8f0;
+      --subtext:   #94a3b8;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      padding: 2rem 1.5rem;
+      background-image:
+        radial-gradient(ellipse 80% 40% at 50% -10%, rgba(34,211,238,.07) 0%, transparent 70%),
+        repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,.02) 40px),
+        repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,.02) 40px);
+    }
+
+    /* ── HEADER ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--cyan), #0ea5e9);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 0 20px rgba(34,211,238,.35);
+    }
+    h1 {
+      font-family: 'Syne Mono', monospace;
+      font-size: 1.15rem;
+      letter-spacing: .08em;
+      color: var(--text);
+    }
+    h1 span { color: var(--cyan); }
+    .status {
+      display: flex; align-items: center; gap: .5rem;
+      font-size: .78rem; color: var(--subtext);
+      font-family: 'Syne Mono', monospace;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted);
+      transition: background .4s;
+    }
+    .dot.live { background: #22c55e; box-shadow: 0 0 8px #22c55e; animation: pulse 2s infinite; }
+    .dot.error { background: #ef4444; }
+    @keyframes pulse {
+      0%,100% { opacity:1; } 50% { opacity:.4; }
+    }
+
+    /* ── LAYOUT ── */
+    .grid { display: grid; gap: 1.25rem; }
+    .cards-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color .3s;
+    }
+    .card:hover { border-color: rgba(34,211,238,.3); }
+    .card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(34,211,238,.04) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    /* metric cards */
+    .metric-card { min-height: 160px; }
+    .metric-card.humidity .accent { color: var(--amber); }
+    .metric-card.humidity .glow { box-shadow: 0 0 24px rgba(245,158,11,.2); border-color: rgba(245,158,11,.2); }
+    .card-label {
+      font-size: .7rem;
+      font-family: 'Syne Mono', monospace;
+      letter-spacing: .12em;
+      color: var(--subtext);
+      text-transform: uppercase;
+      margin-bottom: .85rem;
+      display: flex; align-items: center; gap: .45rem;
+    }
+    .card-icon { font-size: 14px; }
+    .metric-value {
+      font-family: 'Syne Mono', monospace;
+      font-size: 3.4rem;
+      line-height: 1;
+      letter-spacing: -.02em;
+      color: var(--cyan);
+      transition: color .3s;
+    }
+    .metric-card.humidity .metric-value { color: var(--amber); }
+    .metric-unit {
+      font-size: 1.1rem;
+      color: var(--subtext);
+      margin-left: .2rem;
+    }
+    .metric-sub {
+      margin-top: .6rem;
+      font-size: .78rem;
+      color: var(--subtext);
+    }
+    .metric-sub strong { color: var(--text); }
+
+    /* chart cards */
+    .chart-card { padding: 1.5rem 1.5rem 1.25rem; }
+    .chart-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1.25rem;
+    }
+    .chart-title {
+      font-family: 'Syne Mono', monospace;
+      font-size: .78rem;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--subtext);
+    }
+    .chart-badge {
+      font-size: .68rem;
+      font-family: 'Syne Mono', monospace;
+      padding: .2rem .55rem;
+      border-radius: 99px;
+      background: rgba(34,211,238,.08);
+      border: 1px solid rgba(34,211,238,.2);
+      color: var(--cyan);
+    }
+    .chart-badge.amber {
+      background: rgba(245,158,11,.08);
+      border-color: rgba(245,158,11,.2);
+      color: var(--amber);
+    }
+    canvas { display: block; }
+
+    /* ── FOOTER ── */
+    footer {
+      margin-top: 2.5rem;
+      text-align: center;
+      font-size: .72rem;
+      color: var(--muted);
+      font-family: 'Syne Mono', monospace;
+      letter-spacing: .08em;
+    }
+
+    /* ── SKELETON / loading ── */
+    .skeleton {
+      font-family: 'Syne Mono', monospace;
+      font-size: 3.4rem;
+      color: var(--muted);
+      animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer { 0%,100%{opacity:.3} 50%{opacity:.8} }
+
+    @media(max-width:600px) {
+      .metric-value, .skeleton { font-size: 2.6rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🌡️</div>
+      <h1>WEATHER<span>.</span>STATION</h1>
+    </div>
+    <div class="status">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">Connecting…</span>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- Metric cards -->
+    <div class="cards-row">
+
+      <div class="card metric-card">
+        <div class="card-label"><span class="card-icon">🌡️</span> Temperature</div>
+        <div>
+          <span class="metric-value skeleton" id="tempVal">--</span>
+          <span class="metric-unit accent">°C</span>
+        </div>
+        <div class="metric-sub" id="tempSub">Waiting for data…</div>
+      </div>
+
+      <div class="card metric-card humidity">
+        <div class="card-label"><span class="card-icon">💧</span> Humidity</div>
+        <div>
+          <span class="metric-value skeleton" id="humVal">--</span>
+          <span class="metric-unit">%</span>
+        </div>
+        <div class="metric-sub" id="humSub">Waiting for data…</div>
+      </div>
+
+    </div>
+
+    <!-- Live chart -->
+    <div class="card chart-card">
+      <div class="chart-header">
+        <span class="chart-title">Live Feed — Last 20 Readings</span>
+        <span class="chart-badge" id="liveBadge">● LIVE</span>
+      </div>
+      <canvas id="liveChart" height="120"></canvas>
+    </div>
+
+    <!-- History chart -->
+    <div class="card chart-card">
+      <div class="chart-header">
+        <span class="chart-title">History — Up to 100 Readings</span>
+        <span class="chart-badge amber" id="histBadge">STORED</span>
+      </div>
+      <canvas id="histChart" height="120"></canvas>
+    </div>
+
+  </div>
+
+  <footer>ESP32 · DHT11 · Firebase RTDB · Updated every 5 s</footer>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp }      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, onValue }
+                                  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    // ── Firebase config ───────────────────────────────────────────────────────
+    const firebaseConfig = {
+      apiKey:      "AIzaSyDZSJaNdpgmYwdngMDn-1_EKkUVmtVNaRo",
+      databaseURL: "https://weather-app-esp32-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    const MAX_LIVE = 20;
+    const MAX_HIST = 100;
+    const HISTORY_KEY = "wx_history";
+
+    let liveTemp = [], liveHum = [], liveLabels = [];
+    let history  = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+
+    // ── DOM refs ──────────────────────────────────────────────────────────────
+    const tempVal  = document.getElementById("tempVal");
+    const humVal   = document.getElementById("humVal");
+    const tempSub  = document.getElementById("tempSub");
+    const humSub   = document.getElementById("humSub");
+    const dot      = document.getElementById("statusDot");
+    const statusTx = document.getElementById("statusText");
+
+    // ── Chart helpers ─────────────────────────────────────────────────────────
+    const chartDefaults = {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: "#111827",
+        borderColor: "rgba(34,211,238,.3)",
+        borderWidth: 1,
+        titleColor: "#94a3b8",
+        bodyColor: "#e2e8f0",
+        padding: 10,
+        titleFont: { family: "'Syne Mono', monospace", size: 11 },
+        bodyFont: { family: "'DM Sans', sans-serif", size: 13 }
+      }},
+      scales: {
+        x: {
+          grid: { color: "rgba(255,255,255,.04)" },
+          ticks: { color: "#4b5563", font: { family: "'Syne Mono', monospace", size: 10 }, maxTicksLimit: 8 }
+        },
+        yTemp: {
+          type: "linear", position: "left",
+          grid: { color: "rgba(255,255,255,.04)" },
+          ticks: { color: "#22d3ee", font: { family: "'Syne Mono', monospace", size: 10 }, callback: v => v + "°" },
+        },
+        yHum: {
+          type: "linear", position: "right",
+          grid: { drawOnChartArea: false },
+          ticks: { color: "#f59e0b", font: { family: "'Syne Mono', monospace", size: 10 }, callback: v => v + "%" },
+        }
+      }
+    };
+
+    function makeDataset(label, data, color, yAxisID) {
+      return {
+        label, data,
+        yAxisID,
+        borderColor: color,
+        backgroundColor: color.replace(")", ",.08)").replace("rgb", "rgba"),
+        borderWidth: 2,
+        pointRadius: 3,
+        pointHoverRadius: 6,
+        pointBackgroundColor: color,
+        tension: 0.4,
+        fill: true,
+      };
+    }
+
+    // Live chart
+    const liveChart = new Chart(
+      document.getElementById("liveChart"),
+      {
+        type: "line",
+        data: {
+          labels: liveLabels,
+          datasets: [
+            makeDataset("Temperature °C", liveTemp, "rgb(34,211,238)", "yTemp"),
+            makeDataset("Humidity %",     liveHum,  "rgb(245,158,11)", "yHum"),
+          ]
+        },
+        options: { ...chartDefaults }
+      }
+    );
+
+    // History chart
+    const histLabels = history.map(h => h.t);
+    const histTemp   = history.map(h => h.temp);
+    const histHum    = history.map(h => h.hum);
+
+    const histChart = new Chart(
+      document.getElementById("histChart"),
+      {
+        type: "line",
+        data: {
+          labels: histLabels,
+          datasets: [
+            makeDataset("Temperature °C", histTemp, "rgb(34,211,238)", "yTemp"),
+            makeDataset("Humidity %",     histHum,  "rgb(245,158,11)", "yHum"),
+          ]
+        },
+        options: { ...chartDefaults }
+      }
+    );
+
+    // ── Time helper ───────────────────────────────────────────────────────────
+    function timeNow() {
+      const d = new Date();
+      return d.getHours().toString().padStart(2,"0") + ":" +
+             d.getMinutes().toString().padStart(2,"0") + ":" +
+             d.getSeconds().toString().padStart(2,"0");
+    }
+
+    // ── Status helpers ────────────────────────────────────────────────────────
+    function setStatus(state, msg) {
+      dot.className = "dot " + state;
+      statusTx.textContent = msg;
+    }
+
+    // ── Main listener ─────────────────────────────────────────────────────────
+    let temp = null, hum = null;
+
+    function tryUpdate() {
+      if (temp === null || hum === null) return;
+
+      const label = timeNow();
+
+      // Update display cards
+      tempVal.className = "metric-value";
+      humVal.className  = "metric-value";
+      tempVal.textContent = temp.toFixed(1);
+      humVal.textContent  = hum.toFixed(1);
+
+      // Comfort description
+      const comfort = temp > 30 ? "🔥 Hot" : temp > 25 ? "☀️ Warm" : temp > 18 ? "😊 Comfortable" : "❄️ Cool";
+      const humid   = hum > 80 ? "💦 Very humid" : hum > 60 ? "🌫️ Humid" : hum > 40 ? "👌 Comfortable" : "🏜️ Dry";
+      tempSub.innerHTML = `<strong>${comfort}</strong> · Last update: ${label}`;
+      humSub.innerHTML  = `<strong>${humid}</strong> · Last update: ${label}`;
+
+      // ── Live chart (rolling window) ────────────────────────────────────────
+      liveLabels.push(label);
+      liveTemp.push(parseFloat(temp.toFixed(2)));
+      liveHum.push(parseFloat(hum.toFixed(2)));
+      if (liveLabels.length > MAX_LIVE) {
+        liveLabels.shift(); liveTemp.shift(); liveHum.shift();
+      }
+      liveChart.update("active");
+
+      // ── History chart + localStorage ──────────────────────────────────────
+      history.push({ t: label, temp: parseFloat(temp.toFixed(2)), hum: parseFloat(hum.toFixed(2)) });
+      if (history.length > MAX_HIST) history.shift();
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+
+      histChart.data.labels   = history.map(h => h.t);
+      histChart.data.datasets[0].data = history.map(h => h.temp);
+      histChart.data.datasets[1].data = history.map(h => h.hum);
+      histChart.update("active");
+
+      setStatus("live", "Connected · " + label);
+    }
+
+    // Listen to temperature
+    onValue(ref(db, "weather/temperature"), snap => {
+      temp = snap.val();
+      tryUpdate();
+    }, err => {
+      setStatus("error", "DB Error: " + err.message);
+    });
+
+    // Listen to humidity
+    onValue(ref(db, "weather/humidity"), snap => {
+      hum = snap.val();
+      tryUpdate();
+    }, err => {
+      setStatus("error", "DB Error: " + err.message);
+    });
+
+  </script>
+</body>
+</html>
