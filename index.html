@@ -9,7 +9,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 
   <link rel="stylesheet" href="style.css">
- 
 </head>
 <body>
 
@@ -30,6 +29,13 @@
 
   <hr>
 
+  <!-- Alert banner -->
+  <div class="alert-banner" id="alertBanner">
+    <span class="alert-icon" id="alertIcon">⚠️</span>
+    <span class="alert-text" id="alertText"></span>
+  </div>
+
+  <!-- Metric cards: temp, humidity, heat index -->
   <div class="metric-row">
     <div class="metric">
       <div class="metric-label">
@@ -42,6 +48,7 @@
       </div>
       <div class="metric-desc" id="tempSub">Waiting for data…</div>
     </div>
+
     <div class="metric">
       <div class="metric-label">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
@@ -53,11 +60,71 @@
       </div>
       <div class="metric-desc" id="humSub">Waiting for data…</div>
     </div>
+
+    <div class="metric heat">
+      <div class="metric-label">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        Feels Like
+      </div>
+      <div>
+        <span class="metric-num loading" id="heatVal">--</span>
+        <span class="metric-unit-inline">°C</span>
+      </div>
+      <div class="metric-desc" id="heatSub">Heat index</div>
+    </div>
   </div>
 
-  <div class="section-label">
-    Live Feed
-    <span class="section-badge">Last 20 readings</span>
+  <!-- Min / Max row -->
+  <div class="minmax-row">
+    <div class="minmax-cell">
+      <div class="minmax-label">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:inline;margin-right:.3rem"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+        Temperature Range
+      </div>
+      <div class="minmax-vals">
+        <div class="minmax-item">
+          <span class="minmax-tag">Min</span>
+          <span class="minmax-val min" id="tempMin">--</span>
+          <span style="font-size:.7rem;color:var(--subtext)">°C</span>
+        </div>
+        <div class="minmax-item">
+          <span class="minmax-tag">Max</span>
+          <span class="minmax-val max" id="tempMax">--</span>
+          <span style="font-size:.7rem;color:var(--subtext)">°C</span>
+        </div>
+      </div>
+    </div>
+    <div class="minmax-cell">
+      <div class="minmax-label">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:inline;margin-right:.3rem"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+        Humidity Range
+      </div>
+      <div class="minmax-vals">
+        <div class="minmax-item">
+          <span class="minmax-tag">Min</span>
+          <span class="minmax-val min" id="humMin">--</span>
+          <span style="font-size:.7rem;color:var(--subtext)">%</span>
+        </div>
+        <div class="minmax-item">
+          <span class="minmax-tag">Max</span>
+          <span class="minmax-val max" id="humMax">--</span>
+          <span style="font-size:.7rem;color:var(--subtext)">%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live chart -->
+  <div class="section-header">
+    <span class="section-label">Live Feed</span>
+    <div class="section-right">
+      <div class="toggle-group" id="liveToggle">
+        <button class="toggle-btn active" data-chart="live" data-show="both">Both</button>
+        <button class="toggle-btn" data-chart="live" data-show="temp">Temp</button>
+        <button class="toggle-btn" data-chart="live" data-show="hum">Humidity</button>
+      </div>
+      <span class="section-badge">Last 20 readings</span>
+    </div>
   </div>
   <div class="chart-box">
     <canvas id="liveChart" height="100"></canvas>
@@ -67,9 +134,21 @@
     </div>
   </div>
 
-  <div class="section-label">
-    History
-    <span class="section-badge">Up to 100 readings</span>
+  <!-- History chart -->
+  <div class="section-header">
+    <span class="section-label">History</span>
+    <div class="section-right">
+      <div class="toggle-group" id="histToggle">
+        <button class="toggle-btn active" data-chart="hist" data-show="both">Both</button>
+        <button class="toggle-btn" data-chart="hist" data-show="temp">Temp</button>
+        <button class="toggle-btn" data-chart="hist" data-show="hum">Humidity</button>
+      </div>
+      <button class="export-btn" id="exportBtn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export CSV
+      </button>
+      <span class="section-badge">Up to 100 readings</span>
+    </div>
   </div>
   <div class="chart-box">
     <canvas id="histChart" height="100"></canvas>
@@ -84,6 +163,6 @@
     <div class="footer-right" id="lastUpdate">—</div>
   </footer>
 
-  <script type="module" src="function.js"> </script>
+  <script type="module" src="function.js"></script>
 </body>
 </html>

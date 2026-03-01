@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
     const firebaseConfig = {
@@ -8,26 +8,71 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
     const app = initializeApp(firebaseConfig);
     const db  = getDatabase(app);
 
-    // Date
-    const days   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    const n = new Date();
+    // ── Date display ──────────────────────────────────────────────────────────
+    const DAYS   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const now = new Date();
     document.getElementById("dateDisplay").textContent =
-      days[n.getDay()] + ", " + n.getDate() + " " + months[n.getMonth()];
+      DAYS[now.getDay()] + ", " + now.getDate() + " " + MONTHS[now.getMonth()];
 
-    const MAX_LIVE = 20, MAX_HIST = 100, KEY = "wx_kento_v1";
+    // ── State ─────────────────────────────────────────────────────────────────
+    const MAX_LIVE = 20, MAX_HIST = 100, KEY = "wx_kento_v2";
     let liveTemp = [], liveHum = [], liveLabels = [];
-    let history = JSON.parse(localStorage.getItem(KEY) || "[]");
+    let history  = JSON.parse(localStorage.getItem(KEY) || "[]");
     let temp = null, hum = null;
+    let tempMin = Infinity, tempMax = -Infinity;
+    let humMin  = Infinity, humMax  = -Infinity;
 
-    const tempVal  = document.getElementById("tempVal");
-    const humVal   = document.getElementById("humVal");
-    const tempSub  = document.getElementById("tempSub");
-    const humSub   = document.getElementById("humSub");
-    const dot      = document.getElementById("statusDot");
-    const statusTx = document.getElementById("statusText");
-    const lastUpd  = document.getElementById("lastUpdate");
+    // ── DOM ───────────────────────────────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const tempVal   = $("tempVal"),  humVal  = $("humVal");
+    const heatVal   = $("heatVal"),  heatSub = $("heatSub");
+    const tempSub   = $("tempSub"),  humSub  = $("humSub");
+    const tempMinEl = $("tempMin"),  tempMaxEl = $("tempMax");
+    const humMinEl  = $("humMin"),   humMaxEl  = $("humMax");
+    const dot       = $("statusDot"), statusTx = $("statusText");
+    const lastUpd   = $("lastUpdate");
+    const alertBanner = $("alertBanner");
+    const alertIcon   = $("alertIcon");
+    const alertText   = $("alertText");
 
+    // ── Heat Index (Rothfusz equation) ────────────────────────────────────────
+    function calcHeatIndex(T, RH) {
+      // Only meaningful above 27°C
+      if (T < 27) return T;
+      const HI =
+        -8.78469475556 +
+        1.61139411 * T +
+        2.33854883889 * RH +
+        -0.14611605 * T * RH +
+        -0.012308094 * T * T +
+        -0.016424828 * RH * RH +
+        0.002211732 * T * T * RH +
+        0.00072546 * T * RH * RH +
+        -0.000003582 * T * T * RH * RH;
+      return Math.round(HI * 10) / 10;
+    }
+
+    // ── Alerts ────────────────────────────────────────────────────────────────
+    function checkAlerts(t, h, hi) {
+      if (t >= 38) {
+        alertBanner.className = "alert-banner show danger";
+        alertIcon.textContent = "🚨";
+        alertText.innerHTML = "<strong>Extreme Heat!</strong> Temperature is " + t.toFixed(1) + "°C — dangerous conditions.";
+      } else if (t >= 35 || hi >= 40) {
+        alertBanner.className = "alert-banner show";
+        alertIcon.textContent = "⚠️";
+        alertText.innerHTML = "<strong>High Temperature Alert!</strong> It is very hot (" + t.toFixed(1) + "°C, feels like " + hi + "°C). Stay hydrated.";
+      } else if (h >= 85) {
+        alertBanner.className = "alert-banner show";
+        alertIcon.textContent = "💧";
+        alertText.innerHTML = "<strong>High Humidity Alert!</strong> Humidity is at " + h.toFixed(1) + "% — feels very muggy.";
+      } else {
+        alertBanner.className = "alert-banner";
+      }
+    }
+
+    // ── Chart config ──────────────────────────────────────────────────────────
     const baseOpts = {
       responsive: true,
       maintainAspectRatio: true,
@@ -78,49 +123,129 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
       };
     }
 
-    const liveChart = new Chart(document.getElementById("liveChart"), {
+    const liveChart = new Chart($("liveChart"), {
       type: "line",
-      data: { labels: liveLabels, datasets: [ds("Temperature °C", liveTemp, "#141414", "yTemp", false), ds("Humidity %", liveHum, "#888884", "yHum", true)] },
-      options: baseOpts
+      data: {
+        labels: liveLabels,
+        datasets: [
+          ds("Temperature °C", liveTemp, "#141414", "yTemp", false),
+          ds("Humidity %",     liveHum,  "#888884", "yHum",  true),
+        ]
+      },
+      options: JSON.parse(JSON.stringify(baseOpts))
     });
 
-    const histChart = new Chart(document.getElementById("histChart"), {
+    const histChart = new Chart($("histChart"), {
       type: "line",
-      data: { labels: history.map(h=>h.t), datasets: [ds("Temperature °C", history.map(h=>h.temp), "#141414", "yTemp", false), ds("Humidity %", history.map(h=>h.hum), "#888884", "yHum", true)] },
-      options: baseOpts
+      data: {
+        labels: history.map(h => h.t),
+        datasets: [
+          ds("Temperature °C", history.map(h => h.temp), "#141414", "yTemp", false),
+          ds("Humidity %",     history.map(h => h.hum),  "#888884", "yHum",  true),
+        ]
+      },
+      options: JSON.parse(JSON.stringify(baseOpts))
     });
 
+    // ── Chart toggle ──────────────────────────────────────────────────────────
+    function applyToggle(chartObj, show) {
+      chartObj.data.datasets[0].hidden = (show === "hum");
+      chartObj.data.datasets[1].hidden = (show === "temp");
+      chartObj.update();
+    }
+
+    document.querySelectorAll(".toggle-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const group = btn.closest(".toggle-group");
+        group.querySelectorAll(".toggle-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const chartName = btn.dataset.chart;
+        const show      = btn.dataset.show;
+        applyToggle(chartName === "live" ? liveChart : histChart, show);
+      });
+    });
+
+    // ── Export CSV ────────────────────────────────────────────────────────────
+    $("exportBtn").addEventListener("click", () => {
+      if (!history.length) { alert("No data to export yet!"); return; }
+      const rows = ["Time,Temperature (°C),Humidity (%)"];
+      history.forEach(r => rows.push(`${r.t},${r.temp},${r.hum}`));
+      const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = "kentozaki_weather_" + new Date().toISOString().slice(0,10) + ".csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
     function timeNow() {
       const d = new Date();
-      return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0")+":"+d.getSeconds().toString().padStart(2,"0");
+      return d.getHours().toString().padStart(2,"0") + ":" +
+             d.getMinutes().toString().padStart(2,"0") + ":" +
+             d.getSeconds().toString().padStart(2,"0");
     }
-    function setStatus(s, m) { dot.className="dot "+s; statusTx.textContent=m; }
+    function setStatus(s, m) { dot.className = "dot " + s; statusTx.textContent = m; }
 
+    // ── Main update ───────────────────────────────────────────────────────────
     function tryUpdate() {
-      if (temp===null||hum===null) return;
+      if (temp === null || hum === null) return;
       const label = timeNow();
-      tempVal.className = humVal.className = "metric-num";
+
+      // Metric cards
+      tempVal.className = humVal.className = heatVal.className = "metric-num";
       tempVal.textContent = temp.toFixed(1);
       humVal.textContent  = hum.toFixed(1);
-      const comfort = temp>30?"Hot":temp>25?"Warm":temp>18?"Comfortable":"Cool";
-      const humid   = hum>80?"Very humid":hum>60?"Humid":hum>40?"Comfortable":"Dry";
+
+      // Heat index
+      const hi = calcHeatIndex(temp, hum);
+      heatVal.textContent = hi;
+      const hiDiff = (hi - temp).toFixed(1);
+      heatSub.innerHTML = hi > temp
+        ? `<strong>+${hiDiff}°</strong> above actual`
+        : `Same as actual temp`;
+
+      // Comfort labels
+      const comfort = temp > 30 ? "Hot" : temp > 25 ? "Warm" : temp > 18 ? "Comfortable" : "Cool";
+      const humid   = hum  > 80 ? "Very humid" : hum > 60 ? "Humid" : hum > 40 ? "Comfortable" : "Dry";
       tempSub.innerHTML = `<strong>${comfort}</strong> &nbsp;·&nbsp; ${label}`;
       humSub.innerHTML  = `<strong>${humid}</strong> &nbsp;·&nbsp; ${label}`;
       lastUpd.textContent = "Last update: " + label;
 
-      liveLabels.push(label); liveTemp.push(+temp.toFixed(2)); liveHum.push(+hum.toFixed(2));
-      if (liveLabels.length>MAX_LIVE){liveLabels.shift();liveTemp.shift();liveHum.shift();}
+      // Min / Max
+      if (temp < tempMin) tempMin = temp;
+      if (temp > tempMax) tempMax = temp;
+      if (hum  < humMin)  humMin  = hum;
+      if (hum  > humMax)  humMax  = hum;
+      tempMinEl.textContent = tempMin.toFixed(1);
+      tempMaxEl.textContent = tempMax.toFixed(1);
+      humMinEl.textContent  = humMin.toFixed(1);
+      humMaxEl.textContent  = humMax.toFixed(1);
+
+      // Alerts
+      checkAlerts(temp, hum, hi);
+
+      // Live chart
+      liveLabels.push(label);
+      liveTemp.push(+temp.toFixed(2));
+      liveHum.push(+hum.toFixed(2));
+      if (liveLabels.length > MAX_LIVE) { liveLabels.shift(); liveTemp.shift(); liveHum.shift(); }
       liveChart.update("active");
 
-      history.push({t:label,temp:+temp.toFixed(2),hum:+hum.toFixed(2)});
-      if (history.length>MAX_HIST) history.shift();
+      // History + localStorage
+      history.push({ t: label, temp: +temp.toFixed(2), hum: +hum.toFixed(2) });
+      if (history.length > MAX_HIST) history.shift();
       localStorage.setItem(KEY, JSON.stringify(history));
-      histChart.data.labels=history.map(h=>h.t);
-      histChart.data.datasets[0].data=history.map(h=>h.temp);
-      histChart.data.datasets[1].data=history.map(h=>h.hum);
+      histChart.data.labels = history.map(h => h.t);
+      histChart.data.datasets[0].data = history.map(h => h.temp);
+      histChart.data.datasets[1].data = history.map(h => h.hum);
       histChart.update("active");
-      setStatus("live","Live · "+label);
+
+      setStatus("live", "Live · " + label);
     }
 
-    onValue(ref(db,"weather/temperature"),s=>{temp=s.val();tryUpdate();},e=>setStatus("error","Error: "+e.message));
-    onValue(ref(db,"weather/humidity"),s=>{hum=s.val();tryUpdate();},e=>setStatus("error","Error: "+e.message));
+    onValue(ref(db, "weather/temperature"), s => { temp = s.val(); tryUpdate(); },
+      e => setStatus("error", "Error: " + e.message));
+    onValue(ref(db, "weather/humidity"),    s => { hum  = s.val(); tryUpdate(); },
+      e => setStatus("error", "Error: " + e.message));
