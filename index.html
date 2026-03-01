@@ -1,78 +1,216 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Weather Station</title>
+  <title>Kentozaki Weather App</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Syne+Mono&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 
   <link rel="stylesheet" href="style.css">
-
+ 
 </head>
 <body>
 
   <header>
-    <div class="logo">
-      <div class="logo-icon">🌡️</div>
-      <h1>WEATHER<span>.</span>STATION</h1>
+    <div>
+      <div class="site-label">Weather Station</div>
+      <h1>Kentozaki<br>Weather App</h1>
+      <div class="status">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">Connecting…</span>
+      </div>
     </div>
-    <div class="status">
-      <div class="dot" id="statusDot"></div>
-      <span id="statusText">Connecting…</span>
+    <div class="header-date">
+      <div class="date-big" id="dateDisplay"></div>
+      <div class="date-sub">ESP32 · DHT11</div>
     </div>
   </header>
 
-  <div class="grid">
+  <hr>
 
-    <!-- Metric cards -->
-    <div class="cards-row">
-
-      <div class="card metric-card">
-        <div class="card-label"><span class="card-icon">🌡️</span> Temperature</div>
-        <div>
-          <span class="metric-value skeleton" id="tempVal">--</span>
-          <span class="metric-unit accent">°C</span>
-        </div>
-        <div class="metric-sub" id="tempSub">Waiting for data…</div>
+  <div class="metric-row">
+    <div class="metric">
+      <div class="metric-label">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+        Temperature
       </div>
-
-      <div class="card metric-card humidity">
-        <div class="card-label"><span class="card-icon">💧</span> Humidity</div>
-        <div>
-          <span class="metric-value skeleton" id="humVal">--</span>
-          <span class="metric-unit">%</span>
-        </div>
-        <div class="metric-sub" id="humSub">Waiting for data…</div>
+      <div>
+        <span class="metric-num loading" id="tempVal">--</span>
+        <span class="metric-unit-inline">°C</span>
       </div>
-
+      <div class="metric-desc" id="tempSub">Waiting for data…</div>
     </div>
-
-    <!-- Live chart -->
-    <div class="card chart-card">
-      <div class="chart-header">
-        <span class="chart-title">Live Feed — Last 20 Readings</span>
-        <span class="chart-badge" id="liveBadge">● LIVE</span>
+    <div class="metric">
+      <div class="metric-label">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>
+        Humidity
       </div>
-      <canvas id="liveChart" height="120"></canvas>
-    </div>
-
-    <!-- History chart -->
-    <div class="card chart-card">
-      <div class="chart-header">
-        <span class="chart-title">History — Up to 100 Readings</span>
-        <span class="chart-badge amber" id="histBadge">STORED</span>
+      <div>
+        <span class="metric-num loading" id="humVal">--</span>
+        <span class="metric-unit-inline">%</span>
       </div>
-      <canvas id="histChart" height="120"></canvas>
+      <div class="metric-desc" id="humSub">Waiting for data…</div>
     </div>
-
   </div>
 
-  <footer>ESP32 · DHT11 · Firebase RTDB · Updated every 5 s</footer>
+  <div class="section-label">
+    Live Feed
+    <span class="section-badge">Last 20 readings</span>
+  </div>
+  <div class="chart-box">
+    <canvas id="liveChart" height="100"></canvas>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line"></div> Temperature °C</div>
+      <div class="legend-item"><div class="legend-line dashed"></div> Humidity %</div>
+    </div>
+  </div>
 
- 
-  <script src="function.js"></script>
+  <div class="section-label">
+    History
+    <span class="section-badge">Up to 100 readings</span>
+  </div>
+  <div class="chart-box">
+    <canvas id="histChart" height="100"></canvas>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line"></div> Temperature °C</div>
+      <div class="legend-item"><div class="legend-line dashed"></div> Humidity %</div>
+    </div>
+  </div>
+
+  <footer>
+    <div class="footer-left">Kentozaki Weather App · Firebase RTDB · Updates every 5s</div>
+    <div class="footer-right" id="lastUpdate">—</div>
+  </footer>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey:      "AIzaSyDZSJaNdpgmYwdngMDn-1_EKkUVmtVNaRo",
+      databaseURL: "https://weather-app-esp32-default-rtdb.asia-southeast1.firebasedatabase.app/"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+
+    // Date
+    const days   = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const n = new Date();
+    document.getElementById("dateDisplay").textContent =
+      days[n.getDay()] + ", " + n.getDate() + " " + months[n.getMonth()];
+
+    const MAX_LIVE = 20, MAX_HIST = 100, KEY = "wx_kento_v1";
+    let liveTemp = [], liveHum = [], liveLabels = [];
+    let history = JSON.parse(localStorage.getItem(KEY) || "[]");
+    let temp = null, hum = null;
+
+    const tempVal  = document.getElementById("tempVal");
+    const humVal   = document.getElementById("humVal");
+    const tempSub  = document.getElementById("tempSub");
+    const humSub   = document.getElementById("humSub");
+    const dot      = document.getElementById("statusDot");
+    const statusTx = document.getElementById("statusText");
+    const lastUpd  = document.getElementById("lastUpdate");
+
+    const baseOpts = {
+      responsive: true,
+      maintainAspectRatio: true,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#fff",
+          borderColor: "#e5e5e3",
+          borderWidth: 1,
+          titleColor: "#888884",
+          bodyColor: "#141414",
+          padding: 10,
+          titleFont: { family: "Inter", size: 10 },
+          bodyFont: { family: "Inter", size: 12 },
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: "#f0f0ee" },
+          ticks: { color: "#c8c8c4", font: { family: "Inter", size: 9 }, maxTicksLimit: 7 }
+        },
+        yTemp: {
+          type: "linear", position: "left",
+          grid: { color: "#f0f0ee" },
+          ticks: { color: "#888884", font: { family: "Inter", size: 9 }, callback: v => v + "°" }
+        },
+        yHum: {
+          type: "linear", position: "right",
+          grid: { drawOnChartArea: false },
+          ticks: { color: "#c8c8c4", font: { family: "Inter", size: 9 }, callback: v => v + "%" }
+        }
+      }
+    };
+
+    function ds(label, data, color, yAxisID, dashed) {
+      return {
+        label, data, yAxisID,
+        borderColor: color,
+        backgroundColor: "transparent",
+        borderWidth: 1.5,
+        borderDash: dashed ? [4,3] : [],
+        pointRadius: 2,
+        pointHoverRadius: 5,
+        pointBackgroundColor: color,
+        tension: 0.35,
+        fill: false,
+      };
+    }
+
+    const liveChart = new Chart(document.getElementById("liveChart"), {
+      type: "line",
+      data: { labels: liveLabels, datasets: [ds("Temperature °C", liveTemp, "#141414", "yTemp", false), ds("Humidity %", liveHum, "#888884", "yHum", true)] },
+      options: baseOpts
+    });
+
+    const histChart = new Chart(document.getElementById("histChart"), {
+      type: "line",
+      data: { labels: history.map(h=>h.t), datasets: [ds("Temperature °C", history.map(h=>h.temp), "#141414", "yTemp", false), ds("Humidity %", history.map(h=>h.hum), "#888884", "yHum", true)] },
+      options: baseOpts
+    });
+
+    function timeNow() {
+      const d = new Date();
+      return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0")+":"+d.getSeconds().toString().padStart(2,"0");
+    }
+    function setStatus(s, m) { dot.className="dot "+s; statusTx.textContent=m; }
+
+    function tryUpdate() {
+      if (temp===null||hum===null) return;
+      const label = timeNow();
+      tempVal.className = humVal.className = "metric-num";
+      tempVal.textContent = temp.toFixed(1);
+      humVal.textContent  = hum.toFixed(1);
+      const comfort = temp>30?"Hot":temp>25?"Warm":temp>18?"Comfortable":"Cool";
+      const humid   = hum>80?"Very humid":hum>60?"Humid":hum>40?"Comfortable":"Dry";
+      tempSub.innerHTML = `<strong>${comfort}</strong> &nbsp;·&nbsp; ${label}`;
+      humSub.innerHTML  = `<strong>${humid}</strong> &nbsp;·&nbsp; ${label}`;
+      lastUpd.textContent = "Last update: " + label;
+
+      liveLabels.push(label); liveTemp.push(+temp.toFixed(2)); liveHum.push(+hum.toFixed(2));
+      if (liveLabels.length>MAX_LIVE){liveLabels.shift();liveTemp.shift();liveHum.shift();}
+      liveChart.update("active");
+
+      history.push({t:label,temp:+temp.toFixed(2),hum:+hum.toFixed(2)});
+      if (history.length>MAX_HIST) history.shift();
+      localStorage.setItem(KEY, JSON.stringify(history));
+      histChart.data.labels=history.map(h=>h.t);
+      histChart.data.datasets[0].data=history.map(h=>h.temp);
+      histChart.data.datasets[1].data=history.map(h=>h.hum);
+      histChart.update("active");
+      setStatus("live","Live · "+label);
+    }
+
+    onValue(ref(db,"weather/temperature"),s=>{temp=s.val();tryUpdate();},e=>setStatus("error","Error: "+e.message));
+    onValue(ref(db,"weather/humidity"),s=>{hum=s.val();tryUpdate();},e=>setStatus("error","Error: "+e.message));
+  </script>
 </body>
 </html>
