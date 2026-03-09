@@ -169,7 +169,7 @@
     $("exportBtn").addEventListener("click", () => {
       if (!history.length) { alert("No data to export yet!"); return; }
       const rows = ["Time,Temperature (°C),Humidity (%)"];
-      history.forEach(r => rows.push(`${r.t},${r.temp},${r.hum}`));
+      history.forEach(r => rows.push(`"${r.t}",${r.temp},${r.hum}`));
       const blob = new Blob([rows.join("\n")], { type: "text/csv" });
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement("a");
