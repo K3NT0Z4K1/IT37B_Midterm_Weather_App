@@ -180,11 +180,20 @@
     });
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    function timeNow() {
+   function timeNow() {
       const d = new Date();
-      return d.getHours().toString().padStart(2,"0") + ":" +
-             d.getMinutes().toString().padStart(2,"0") + ":" +
-             d.getSeconds().toString().padStart(2,"0");
+      const days   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const day    = days[d.getDay()];
+      const date   = d.getDate();
+      const month  = months[d.getMonth()];
+      const year   = d.getFullYear();
+      const hrs    = d.getHours();
+      const mins   = d.getMinutes().toString().padStart(2,"0");
+      const secs   = d.getSeconds().toString().padStart(2,"0");
+      const ampm   = hrs >= 12 ? "PM" : "AM";
+      const hrs12  = (hrs % 12 || 12);
+      return `${day}, ${month} ${date} ${year} · ${hrs12}:${mins}:${secs} ${ampm}`;
     }
     function setStatus(s, m) { dot.className = "dot " + s; statusTx.textContent = m; }
 
